@@ -1,0 +1,7 @@
+{
+  "appId": "com.longbao.caodaivegetarian365",
+  "appName": "Cao Dai Vegetarian 365",
+  "webDir": "www",
+  "backgroundColor": "#2e7d4fff",
+  "server": { "androidScheme": "https" }
+}

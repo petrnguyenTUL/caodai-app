@@ -1,0 +1,24 @@
+{
+  "name": "caodai-vegetarian-365",
+  "version": "1.0.0",
+  "description": "Cao Dai Vegetarian 365 - ung dung an chay thong minh (PWA + Capacitor)",
+  "private": true,
+  "scripts": {
+    "serve": "npx --yes serve -l 5173 www",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
+    "cap:sync": "npx cap sync",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/ios": "^6.1.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor-community/admob": "^6.0.0"
+  }
+}

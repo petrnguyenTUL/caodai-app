@@ -1,0 +1,94 @@
+name: Build CaoDai Vegetarian 365 (AAB + APK)
+
+# Chay tu dong khi push len nhanh main, hoac bam tay tai tab Actions (Run workflow).
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Add Android platform (tao thu muc android/)
+        run: npx cap add android
+
+      - name: Sync web assets + plugins (AdMob...)
+        run: npx cap sync android
+
+      - name: Nang cau hinh dat chuan Google Play (API 35 + AGP 8.6 + Gradle 8.7)
+        run: |
+          sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
+          sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
+          sed -i -E 's#com.android.tools.build:gradle:[0-9.]+#com.android.tools.build:gradle:8.6.0#' android/build.gradle
+          sed -i -E 's#gradle-[0-9.]+-(all|bin).zip#gradle-8.7-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
+          echo '----- variables.gradle -----'; cat android/variables.gradle
+
+      - name: Gan AdMob App ID vao AndroidManifest
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+        run: |
+          APPID="${ADMOB_APP_ID:-ca-app-pub-3940256099942544~3347511713}"
+          MAN=android/app/src/main/AndroidManifest.xml
+          if ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' "$MAN"; then
+            sed -i "s#</application>#    <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$APPID\"/>\n    </application>#" "$MAN"
+          fi
+          grep -n 'APPLICATION_ID' "$MAN" || true
+
+      - name: Decode keystore
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KS" | base64 -d > caodai.keystore
+
+      - name: Build AAB (bundleRelease)
+        run: |
+          cd android
+          chmod +x gradlew || true
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Build APK (tuy chon, de test trc tiep)
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon || true
+
+      - name: Ky AAB + APK bang keystore cua ban
+        env:
+          P1: ${{ secrets.KEYSTORE_PASSWORD }}
+          P2: ${{ secrets.KEY_ALIAS }}
+          P3: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          KS="$PWD/caodai.keystore"
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -keystore "$KS" -storepass "$P1" -keypass "$P3" \
+            -sigalg SHA256withRSA -digestalg SHA-256 "$AAB" "$P2"
+          cp "$AAB" caodai-release.aab
+          jarsigner -verify caodai-release.aab && echo 'AAB SIGNED OK'
+          APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if [ -f "$APK" ]; then
+            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+            "$BT/apksigner" sign --ks "$KS" --ks-pass pass:"$P1" --key-pass pass:"$P3" \
+              --ks-key-alias "$P2" --out caodai-release.apk "$APK" || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caodai-release
+          path: |
+            caodai-release.aab
+            caodai-release.apk
